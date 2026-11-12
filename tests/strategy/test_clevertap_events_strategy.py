@@ -1,0 +1,57 @@
+from strategies.clevertap_events_strategy import ClevertapEventsStrategy
+from fetch.clevertap_events_fetcher import ClevertapEventsFetcher
+from unittest.mock import MagicMock
+from tests.fetch.clevertap_sample import (
+    response as fetch_mock_response,
+    cursor_response as fetch_mock_cursor_response,
+)
+from domain.datasource.models import (
+    DataSource,
+    IntegrationProvider,
+    DataSourceVersion,
+    Credential,
+    CredentialType,
+)
+
+
+class TestClevertapEventsStrategy:
+    def setup_method(self):
+        self.datasource = DataSource(
+            _id="000000000000000000000001",
+            provider=IntegrationProvider.CLEVERTAP,
+            name="Mocking strategy",
+            externalSourceId="000000000000000000000002",
+            version=DataSourceVersion.DEFAULT,
+        )
+
+        self.credential = Credential(
+            type=CredentialType.API_KEY,
+            accountId="TEST_ACCOUNTID_006",
+            secret="TEST_CREDENTIAL_003",
+        )
+        self.strategy = ClevertapEventsStrategy(
+            self.datasource, self.credential, "000000000000000000000002", "20221122"
+        )
+        self.strategy.fetcher = ClevertapEventsFetcher(self.credential, "20221122")
+        self.strategy.fetcher.get_start_cursor = MagicMock(
+            return_value=fetch_mock_cursor_response
+        )
+        self.strategy.fetcher.open = MagicMock(return_value=fetch_mock_response)
+
+        self.strategy.runlog_service = MagicMock()
+        self.strategy.saver = MagicMock()
+
+        self.strategy.event_processor = MagicMock()
+        self.strategy.properties_saver = MagicMock()
+        self.strategy.get_events = MagicMock(return_value=[])
+        self.strategy.runlog_service.get_events_list = MagicMock(return_value=[])
+
+    def test_execute(self):
+        self.strategy.execute()
+        assert self.strategy.runlog_service.update_started.called
+        assert self.strategy.runlog_service.get_events_list.called
+        assert self.strategy.fetcher.open.called
+        assert self.strategy.fetcher.get_start_cursor.called
+        assert self.strategy.event_processor.process.called
+        assert self.strategy.saver.save.called
+        assert self.strategy.properties_saver.save.called
